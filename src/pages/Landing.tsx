@@ -11,6 +11,7 @@ import { AuthModal } from '@/components/auth/AuthModal';
 import { UserRole } from '@/types/auth';
 import { Link } from 'react-router-dom';
 import heroImage from '@/assets/hero-food.jpg';
+import { FeedbackSection } from '@/components/home/FeedbackSection';
 
 const roles = [
   {
@@ -392,6 +393,9 @@ export default function Landing() {
             </motion.div>
           </div>
         </section>
+
+        {/* Feedback Section */}
+        <FeedbackSection />
 
         {/* Footer */}
         <footer className="py-12 bg-secondary/50 border-t border-border">
