@@ -42,7 +42,17 @@ const filterOptions = [
 ];
 
 // Sample delivery addresses
-const savedAddresses = [
+interface SavedAddress {
+  id: string | number;
+  type: string;
+  name: string;
+  address: string;
+  isDefault: boolean;
+  coordinates?: { latitude: number; longitude: number };
+  isNew?: boolean;
+}
+
+const savedAddresses: SavedAddress[] = [
   { id: 1, type: 'home', name: 'Home', address: '123 Main Street, Food City', isDefault: true },
   { id: 2, type: 'work', name: 'Office', address: '456 Business Ave, Corporate Park', isDefault: false },
   { id: 3, type: 'other', name: 'Gym', address: '789 Fitness Road, Sports Complex', isDefault: false },
@@ -256,7 +266,7 @@ export default function UserDashboard() {
     activeFilters.forEach(filter => {
       switch(filter) {
         case 'fastDelivery':
-          result = result.filter(r => r.deliveryTime <= 30);
+          result = result.filter(r => parseInt(r.deliveryTime) <= 30);
           break;
         case 'freeDelivery':
           result = result.filter(r => r.deliveryFee === 0 || r.deliveryFee === undefined);
@@ -824,7 +834,7 @@ export default function UserDashboard() {
                         value={newAddress}
                         onChange={(e) => setNewAddress(e.target.value)}
                         placeholder="Enter your full address including street, city, and zip code"
-                        rows="3"
+                        rows={3}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF7A00] focus:border-[#FF7A00]"
                       />
                     </div>
@@ -1722,7 +1732,7 @@ export default function UserDashboard() {
                               FREE DELIVERY
                             </span>
                           )}
-                          {restaurant.deliveryTime <= 30 && (
+                          {parseInt(restaurant.deliveryTime) <= 30 && (
                             <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
                               FAST DELIVERY
                             </span>
@@ -1866,7 +1876,7 @@ export default function UserDashboard() {
                               Free Delivery
                             </span>
                           )}
-                          {restaurant.deliveryTime <= 30 && (
+                          {parseInt(restaurant.deliveryTime) <= 30 && (
                             <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full">
                               Fast Delivery
                             </span>

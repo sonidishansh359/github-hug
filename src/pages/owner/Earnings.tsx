@@ -83,8 +83,9 @@ const exportToCSV = (data: typeof enhancedEarningsData, period: Period) => {
 const exportToPDF = async (data: typeof enhancedEarningsData, period: Period) => {
   try {
     // Dynamic import for client-side only
-              const { jsPDF } = await import('jspdf');
-               await import('jspdf-autotable');
+    const jspdfModule = await import('jspdf');
+    const jsPDF = jspdfModule.default;
+    await import('jspdf-autotable');
     
     const doc = new jsPDF();
     
@@ -157,7 +158,7 @@ const exportToPDF = async (data: typeof enhancedEarningsData, period: Period) =>
     });
     
     // Add footer
-    const pageCount = doc.getNumberOfPages();
+    const pageCount = (doc as any).getNumberOfPages ? (doc as any).getNumberOfPages() : 1;
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setFontSize(8);

@@ -30,6 +30,36 @@ export interface Restaurant {
   deliveryTime: string;
   minOrder: number;
   createdAt: string;
+  // Extended properties
+  email?: string;
+  website?: string;
+  deliveryFee?: number;
+  taxRate?: number;
+  commissionRate?: number;
+  instagram?: string;
+  facebook?: string;
+  twitter?: string;
+  openingTime?: string;
+  closingTime?: string;
+  openOnWeekends?: boolean;
+  acceptCash?: boolean;
+  acceptCard?: boolean;
+  acceptDigital?: boolean;
+  hasWifi?: boolean;
+  hasOutdoor?: boolean;
+  hasParking?: boolean;
+  hasDelivery?: boolean;
+  hasTakeaway?: boolean;
+  primaryColor?: string;
+  secondaryColor?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  categories?: string[];
+  discount?: number;
+  hasOffers?: boolean;
+  isNew?: boolean;
+  healthyOptions?: boolean;
+  isPremium?: boolean;
 }
 
 export interface MenuItem {
@@ -43,6 +73,10 @@ export interface MenuItem {
   isVeg: boolean;
   isAvailable: boolean;
   createdAt: string;
+  // Extended properties
+  preparationTime?: number;
+  calories?: number;
+  ingredients?: string;
 }
 
 export interface Order {
@@ -81,6 +115,7 @@ export interface DeliveryBoy {
   name: string;
   phone: string;
   isAvailable: boolean;
+  vehicle?: string;
 }
 
 export interface EarningsData {

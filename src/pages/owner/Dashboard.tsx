@@ -50,7 +50,7 @@ const mockPeakHours = [
 ];
 
 export default function OwnerDashboard() {
-  const { orders, restaurant, getTodayStats, updateRestaurantStatus } = useOwnerData();
+  const { orders, restaurant, getTodayStats, toggleRestaurantOpen } = useOwnerData();
   const stats = getTodayStats();
   const [notifications, setNotifications] = useState(mockNotifications);
   const [showPeakHours, setShowPeakHours] = useState(false);
@@ -71,12 +71,12 @@ export default function OwnerDashboard() {
   const maxHourly = Math.max(...hourlyData);
 
   // Handle restaurant status toggle
-  const handleToggleStatus = async () => {
+  const handleToggleStatus = () => {
     if (!restaurant || isTogglingStatus) return;
     
     setIsTogglingStatus(true);
     try {
-      await updateRestaurantStatus(!restaurant.isOpen);
+      toggleRestaurantOpen();
     } catch (error) {
       console.error('Failed to update restaurant status:', error);
     } finally {
