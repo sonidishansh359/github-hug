@@ -5,7 +5,6 @@ import {
   Home,
   ShoppingBag,
   MapPin,
-  Clock,
   User,
   LogOut,
   Menu,
@@ -13,6 +12,7 @@ import {
   Search,
   ShoppingCart,
   Bell,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +24,7 @@ const navItems = [
   { icon: Search, label: 'Browse', path: '/user/restaurants' },
   { icon: ShoppingBag, label: 'Orders', path: '/user/orders' },
   { icon: MapPin, label: 'Track Order', path: '/user/tracking' },
+  { icon: MessageSquare, label: 'Feedback', path: '/user/feedback' },
   { icon: User, label: 'Profile', path: '/user/profile' },
 ];
 
