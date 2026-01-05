@@ -33,6 +33,7 @@ import UserCart from "./pages/user/UserCart";
 import CheckoutSuccess from "./pages/user/CheckoutSuccess";
 import OrderTracking from "./pages/user/OrderTracking";
 import OrderHistory from "./pages/user/OrderHistory";
+import UserFeedback from "./pages/user/Feedback";
 
 const queryClient = new QueryClient();
 
@@ -114,6 +115,7 @@ const AppRoutes = () => (
       <Route path="checkout-success" element={<CheckoutSuccess />} />
       <Route path="tracking" element={<OrderTracking />} />
       <Route path="orders" element={<OrderHistory />} />
+      <Route path="feedback" element={<UserFeedback />} />
       <Route path="profile" element={<div className="p-8 text-center text-muted-foreground">Profile page</div>} />
     </Route>
     
