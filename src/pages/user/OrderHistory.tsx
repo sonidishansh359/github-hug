@@ -1,9 +1,21 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, ChevronRight } from 'lucide-react';
-import { useUserData } from '@/contexts/UserDataContext';
+import { Clock, ChevronRight, MessageSquare, CheckCircle } from 'lucide-react';
+import { useUserData, UserOrder } from '@/contexts/UserDataContext';
+import { Button } from '@/components/ui/button';
+import { OrderFeedbackModal } from '@/components/user/OrderFeedbackModal';
 
 export default function OrderHistory() {
   const { orders } = useUserData();
+  const [feedbackOrder, setFeedbackOrder] = useState<UserOrder | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState<Set<string>>(new Set());
+
+  const handleFeedbackSuccess = (orderId: string) => {
+    setFeedbackGiven(prev => new Set(prev).add(orderId));
+  };
+
+  const isDelivered = (status: string) => status === 'delivered';
+  const hasFeedback = (orderId: string) => feedbackGiven.has(orderId);
 
   return (
     <div className="pb-24 lg:pb-8 px-4 lg:px-8 py-6 max-w-4xl mx-auto">
@@ -49,12 +61,44 @@ export default function OrderHistory() {
                     <Clock className="w-4 h-4" />
                     {new Date(order.createdAt).toLocaleDateString()}
                   </div>
+                  
+                  {/* Feedback Button for Delivered Orders */}
+                  {isDelivered(order.status) && (
+                    <div className="mt-3">
+                      {hasFeedback(order.id) ? (
+                        <div className="flex items-center gap-2 text-sm text-success">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Feedback submitted</span>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setFeedbackOrder(order)}
+                          className="gap-2"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          Give Feedback
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </div>
             </motion.div>
           ))}
         </div>
+      )}
+
+      {/* Feedback Modal */}
+      {feedbackOrder && (
+        <OrderFeedbackModal
+          order={feedbackOrder}
+          isOpen={!!feedbackOrder}
+          onClose={() => setFeedbackOrder(null)}
+          onSubmitSuccess={handleFeedbackSuccess}
+        />
       )}
     </div>
   );
