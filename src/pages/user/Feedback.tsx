@@ -1,184 +1,149 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Send, Loader2, CheckCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { toast } from '@/hooks/use-toast';
+import { MessageSquare } from 'lucide-react';
+import { useUserData, UserOrder } from '@/contexts/UserDataContext';
+import { OrderFeedbackModal } from '@/components/user/OrderFeedbackModal';
 
 export default function Feedback() {
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
-  const [feedback, setFeedback] = useState('');
-  const [name, setName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const { orders } = useUserData();
+  const [feedbackOrder, setFeedbackOrder] = useState<UserOrder | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState<Set<string>>(new Set());
 
-  const handleSubmit = async () => {
-    if (rating === 0) {
-      toast({
-        title: "Rating required",
-        description: "Please select a star rating before submitting.",
-        variant: "destructive"
-      });
-      return;
-    }
+  // Filter delivered orders that haven't received feedback yet
+  const deliveredOrders = orders.filter(order => order.status === 'delivered');
+  const pendingFeedbackOrders = deliveredOrders.filter(order => !feedbackGiven.has(order.id));
+  const completedFeedbackOrders = deliveredOrders.filter(order => feedbackGiven.has(order.id));
 
-    if (!feedback.trim()) {
-      toast({
-        title: "Feedback required",
-        description: "Please share your experience before submitting.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast({
-      title: "Thank you for your feedback!",
-      description: "Your feedback helps us improve our service.",
-    });
-    
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-  };
-
-  const handleReset = () => {
-    setRating(0);
-    setFeedback('');
-    setName('');
-    setIsSubmitted(false);
+  const handleFeedbackSubmit = (orderId: string) => {
+    setFeedbackGiven(prev => new Set([...prev, orderId]));
   };
 
   return (
     <div className="min-h-screen p-4 lg:p-8 pb-24 lg:pb-8">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <h1 className="text-3xl font-bold text-foreground mb-2">Share Your Feedback</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Order Feedback</h1>
           <p className="text-muted-foreground">
-            We value your opinion! Help us improve by sharing your experience.
+            Share your experience and help us improve our service.
           </p>
         </motion.div>
 
-        {isSubmitted ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-card border border-border rounded-2xl p-8 text-center"
-          >
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Thank You!</h2>
-            <p className="text-muted-foreground mb-6">
-              Your feedback has been submitted successfully. We appreciate your time!
-            </p>
-            <Button onClick={handleReset}>
-              Submit Another Feedback
-            </Button>
-          </motion.div>
-        ) : (
+        {deliveredOrders.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-2xl p-6 lg:p-8"
+            className="bg-card border border-border rounded-2xl p-8 text-center"
           >
-            {/* Name Input (Optional) */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Your Name (optional)
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
-                disabled={isSubmitting}
-                className="w-full px-4 py-3 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
-              />
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <MessageSquare className="w-8 h-8 text-muted-foreground" />
             </div>
-
-            {/* Star Rating */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground mb-3">
-                How would you rate your overall experience? *
-              </label>
-              <div className="flex items-center justify-center gap-2">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setRating(star)}
-                    onMouseEnter={() => setHoveredRating(star)}
-                    onMouseLeave={() => setHoveredRating(0)}
-                    disabled={isSubmitting}
-                    className="p-1 transition-transform hover:scale-110 disabled:opacity-50"
-                  >
-                    <Star
-                      className={`w-10 h-10 transition-colors ${
-                        star <= (hoveredRating || rating)
-                          ? 'fill-primary text-primary'
-                          : 'text-muted-foreground'
-                      }`}
-                    />
-                  </button>
-                ))}
-              </div>
-              {rating > 0 && (
-                <p className="text-center text-sm text-muted-foreground mt-2">
-                  {rating === 1 && 'Poor'}
-                  {rating === 2 && 'Fair'}
-                  {rating === 3 && 'Good'}
-                  {rating === 4 && 'Very Good'}
-                  {rating === 5 && 'Excellent'}
-                </p>
-              )}
-            </div>
-
-            {/* Feedback Text */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Share your experience *
-              </label>
-              <textarea
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Tell us what you liked or what we can improve..."
-                disabled={isSubmitting}
-                rows={5}
-                className="w-full px-4 py-3 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none disabled:opacity-50"
-              />
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting || rating === 0 || !feedback.trim()}
-              className="w-full"
-              size="lg"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 mr-2" />
-                  Submit Feedback
-                </>
-              )}
-            </Button>
+            <h2 className="text-xl font-semibold text-foreground mb-2">No Delivered Orders</h2>
+            <p className="text-muted-foreground">
+              Once your orders are delivered, you can provide feedback here.
+            </p>
           </motion.div>
+        ) : (
+          <div className="space-y-6">
+            {/* Orders awaiting feedback */}
+            {pendingFeedbackOrders.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  Awaiting Your Feedback ({pendingFeedbackOrders.length})
+                </h2>
+                <div className="space-y-4">
+                  {pendingFeedbackOrders.map((order, index) => (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="bg-card border border-border rounded-xl p-4 flex items-center gap-4"
+                    >
+                      <img
+                        src={order.restaurantImage}
+                        alt={order.restaurantName}
+                        className="w-16 h-16 rounded-lg object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-foreground truncate">
+                          {order.restaurantName}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {order.items.length} items • ₹{order.totalAmount.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Delivered on {new Date(order.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setFeedbackOrder(order)}
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors whitespace-nowrap"
+                      >
+                        Give Feedback
+                      </button>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Orders with feedback given */}
+            {completedFeedbackOrders.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  Feedback Submitted ({completedFeedbackOrders.length})
+                </h2>
+                <div className="space-y-4">
+                  {completedFeedbackOrders.map((order, index) => (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="bg-card border border-border rounded-xl p-4 flex items-center gap-4 opacity-70"
+                    >
+                      <img
+                        src={order.restaurantImage}
+                        alt={order.restaurantName}
+                        className="w-16 h-16 rounded-lg object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-foreground truncate">
+                          {order.restaurantName}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {order.items.length} items • ₹{order.totalAmount.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Delivered on {new Date(order.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <span className="px-4 py-2 bg-muted text-muted-foreground rounded-lg text-sm font-medium">
+                        Submitted
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
+
+      {/* Feedback Modal */}
+      {feedbackOrder && (
+        <OrderFeedbackModal
+          order={feedbackOrder}
+          isOpen={!!feedbackOrder}
+          onClose={() => setFeedbackOrder(null)}
+          onSubmitSuccess={handleFeedbackSubmit}
+        />
+      )}
     </div>
   );
 }
