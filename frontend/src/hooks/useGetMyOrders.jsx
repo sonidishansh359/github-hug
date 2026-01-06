@@ -9,11 +9,12 @@ function useGetMyOrders() {
     const dispatch=useDispatch()
     const {userData}=useSelector(state=>state.user)
   useEffect(()=>{
+    if (!userData) return;
   const fetchOrders=async () => {
     try {
            const result=await axios.get(`${serverUrl}/api/order/my-orders`,{withCredentials:true})
             dispatch(setMyOrders(result.data))
-   
+
 
 
     } catch (error) {
@@ -22,8 +23,8 @@ function useGetMyOrders() {
 }
   fetchOrders()
 
- 
-  
+
+
   },[userData])
 }
 

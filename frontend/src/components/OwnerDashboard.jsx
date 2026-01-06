@@ -1,13 +1,38 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Nav from './NaV.JSX'
 import { useSelector } from 'react-redux'
 import { FaUtensils } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
 import { FaPen } from "react-icons/fa";
 import OwnerItemCard from './ownerItemCard';
+import { getSocket } from '../socket';
+import OwnerOrderCard from './OwnerOrderCard';
 function OwnerDashboard() {
   const { myShopData } = useSelector(state => state.owner)
+  const { userData } = useSelector(state => state.user)
   const navigate = useNavigate()
+  const [realTimeOrders, setRealTimeOrders] = useState([])
+  const socket = getSocket()
+
+  useEffect(() => {
+    if (!socket || !userData) return
+
+    console.log('OwnerDashboard: Setting up newOrder listener for user:', userData._id)
+
+    socket.on('newOrder', (data) => {
+      console.log('OwnerDashboard: Received newOrder event:', data)
+      if (data.shopOrders?.owner._id === userData._id) {
+        console.log('OwnerDashboard: Adding order to realTimeOrders')
+        setRealTimeOrders(prev => [data, ...prev])
+      } else {
+        console.log('OwnerDashboard: Order not for this owner. Owner ID:', data.shopOrders?.owner._id, 'Current user ID:', userData._id)
+      }
+    })
+
+    return () => {
+      socket.off('newOrder')
+    }
+  }, [socket, userData])
 
   
   return (
@@ -66,7 +91,18 @@ function OwnerDashboard() {
                 <OwnerItemCard data={item} key={index}/>
               ))}
               </div>}
-            
+
+            {realTimeOrders.length > 0 && (
+              <div className='w-full max-w-3xl'>
+                <h2 className='text-xl font-bold text-gray-800 mb-4'>New Orders</h2>
+                <div className='space-y-4'>
+                  {realTimeOrders.map((order, index) => (
+                    <OwnerOrderCard data={order} key={order._id || index} />
+                  ))}
+                </div>
+              </div>
+            )}
+
         </div>}
 
 

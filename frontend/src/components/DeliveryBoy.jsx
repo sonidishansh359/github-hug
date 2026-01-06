@@ -1,50 +1,57 @@
 import React from 'react'
-import Nav from './NaV.JSX'
+import Nav from './Nav'
 import { useSelector } from 'react-redux'
+import { getSocket } from '../socket'
 import axios from 'axios'
 import { serverUrl } from '../App'
 import { useEffect } from 'react'
 import { useState } from 'react'
 import DeliveryBoyTracking from './DeliveryBoyTracking'
 import { ClipLoader } from 'react-spinners'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 function DeliveryBoy() {
-  const {userData,socket}=useSelector(state=>state.user)
+  const {userData} = useSelector(state=>state.user)
+  const socket = getSocket()
   const [currentOrder,setCurrentOrder]=useState()
   const [showOtpBox,setShowOtpBox]=useState(false)
   const [availableAssignments,setAvailableAssignments]=useState(null)
   const [otp,setOtp]=useState("")
+  const [todayDeliveries,setTodayDeliveries]=useState([])
 const [deliveryBoyLocation,setDeliveryBoyLocation]=useState(null)
 const [loading,setLoading]=useState(false)
 const [message,setMessage]=useState("")
   useEffect(()=>{
-if(!socket || userData.role!=="deliveryBoy") return
-let watchId
-if(navigator.geolocation){
-watchId=navigator.geolocation.watchPosition((position)=>{
-    const latitude=position.coords.latitude
-    const longitude=position.coords.longitude
-    setDeliveryBoyLocation({lat:latitude,lon:longitude})
-    socket.emit('updateLocation',{
-      latitude,
-      longitude,
-      userId:userData._id
-    })
-  }),
-  (error)=>{
-    console.log(error)
-  },
-  {
-    enableHighAccuracy:true
-  }
-}
+    if(!socket || userData.role!=="deliveryBoy") return
+    let watchId
+    if(navigator.geolocation){
+      watchId=navigator.geolocation.watchPosition((position)=>{
+        const latitude=position.coords.latitude
+        const longitude=position.coords.longitude
+        setDeliveryBoyLocation({lat:latitude,lon:longitude})
+        socket.emit('updateLocation',{
+          latitude,
+          longitude,
+          userId:userData._id
+        })
+      }),
+      (error)=>{
+        console.log(error)
+      },
+      {
+        enableHighAccuracy:true
+      }
+    }
 
-return ()=>{
-  if(watchId)navigator.geolocation.clearWatch(watchId)
-}
+    return ()=>{
+      if(watchId)navigator.geolocation.clearWatch(watchId)
+    }
 
   },[socket,userData])
 
+
+const ratePerDelivery=50
+const totalEarning=todayDeliveries.reduce((sum,d)=>sum + d.count*ratePerDelivery,0)
 
 
 
@@ -63,27 +70,45 @@ return ()=>{
       const result=await axios.get(`${serverUrl}/api/order/get-current-order`,{withCredentials:true})
     setCurrentOrder(result.data)
     } catch (error) {
-      console.log(error)
+      // If there's no current assignment it's expected to return 400 from backend
+      if (error.response && error.response.status === 400) {
+        setCurrentOrder(null)
+        return
+      }
+      console.error('getCurrentOrder error', error.response?.data || error)
     }
   }
 
 
   const acceptOrder=async (assignmentId) => {
     try {
-      const result=await axios.get(`${serverUrl}/api/order/accept-order/${assignmentId}`,{withCredentials:true})
+      const result=await axios.post(`${serverUrl}/api/order/accept-order/${assignmentId}`,{},{withCredentials:true})
     console.log(result.data)
     await getCurrentOrder()
+    await getAssignments()
     } catch (error) {
-      console.log(error)
+      // Log backend response body for exact reason
+      console.error('acceptOrder error', error.response?.data || error)
+      // Refresh available assignments on error
+      await getAssignments()
+      // Optionally surface message to user
+      const msg = error.response?.data?.message
+      if (msg) alert(msg)
     }
   }
 
   useEffect(()=>{
+    if(!socket) return
     socket.on('newAssignment',(data)=>{
       setAvailableAssignments(prev=>([...prev,data]))
     })
+    // Listen for assignment accepted by another delivery boy
+    socket.on('assignment-accepted', (data) => {
+      setAvailableAssignments(prev => prev.filter(a => a.assignmentId !== data.assignmentId))
+    })
     return ()=>{
       socket.off('newAssignment')
+      socket.off('assignment-accepted')
     }
   },[socket])
   
@@ -97,7 +122,9 @@ return ()=>{
        setShowOtpBox(true)
     console.log(result.data)
     } catch (error) {
-      console.log(error)
+      console.error('sendOtp error', error.response?.data || error)
+      const msg = error.response?.data?.message || 'Failed to send OTP'
+      alert(msg)
       setLoading(false)
     }
   }
@@ -109,18 +136,37 @@ return ()=>{
       },{withCredentials:true})
     console.log(result.data)
     setMessage(result.data.message)
+    // Keep the delivery boy on the same page — refresh local state instead of reloading
+    setShowOtpBox(false)
+    setOtp("")
+    // Refresh current assignment/available assignments and today's deliveries
+    await getCurrentOrder()
+    await getAssignments()
+    handleTodayDeliveries()
+    // Clear success message after a short delay
+    setTimeout(() => setMessage(""), 4000)
     } catch (error) {
       console.log(error)
     }
   }
 
 
-
+   const handleTodayDeliveries=async () => {
+    
+    try {
+      const result=await axios.get(`${serverUrl}/api/order/get-today-deliveries`,{withCredentials:true})
+    console.log(result.data)
+   setTodayDeliveries(result.data)
+    } catch (error) {
+      console.log(error)
+    }
+  }
  
 
   useEffect(()=>{
 getAssignments()
 getCurrentOrder()
+handleTodayDeliveries()
   },[userData])
   return (
     <div className='w-screen min-h-screen flex flex-col gap-5 items-center bg-[#fff9f6] overflow-y-auto'>
@@ -130,6 +176,27 @@ getCurrentOrder()
 <h1 className='text-xl font-bold text-[#ff4d2d]'>Welcome, {userData.fullName}</h1>
 <p className='text-[#ff4d2d] '><span className='font-semibold'>Latitude:</span> {deliveryBoyLocation?.lat}, <span className='font-semibold'>Longitude:</span> {deliveryBoyLocation?.lon}</p>
     </div>
+
+<div className='bg-white rounded-2xl shadow-md p-5 w-[90%] mb-6 border border-orange-100'>
+  <h1 className='text-lg font-bold mb-3 text-[#ff4d2d] '>Today Deliveries</h1>
+
+  <ResponsiveContainer width="100%" height={200}>
+   <BarChart data={todayDeliveries}>
+  <CartesianGrid strokeDasharray="3 3"/>
+  <XAxis dataKey="hour" tickFormatter={(h)=>`${h}:00`}/>
+    <YAxis  allowDecimals={false}/>
+    <Tooltip formatter={(value)=>[value,"orders"]} labelFormatter={label=>`${label}:00`}/>
+      <Bar dataKey="count" fill='#ff4d2d'/>
+   </BarChart>
+  </ResponsiveContainer>
+
+  <div className='max-w-sm mx-auto mt-6 p-6 bg-white rounded-2xl shadow-lg text-center'>
+<h1 className='text-xl font-semibold text-gray-800 mb-2'>Today's Earning</h1>
+<span className='text-3xl font-bold text-green-600'>₹{totalEarning}</span>
+  </div>
+</div>
+
+
 {!currentOrder && <div className='bg-white rounded-2xl p-5 shadow-md w-[90%] border border-orange-100'>
 <h1 className='text-lg font-bold mb-4 flex items-center gap-2'>Available Orders</h1>
 

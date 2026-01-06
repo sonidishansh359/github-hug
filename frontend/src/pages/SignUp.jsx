@@ -11,6 +11,7 @@ import { auth } from '../../firebase';
 import { ClipLoader } from "react-spinners"
 import { useDispatch } from 'react-redux';
 import { setUserData } from '../redux/userSlice';
+
 function SignUp() {
     const primaryColor = "#ff4d2d";
     const hoverColor = "#e64323";
@@ -103,6 +104,7 @@ function SignUp() {
                     <div className='flex gap-2'>
                         {["user", "owner", "deliveryBoy"].map((r) => (
                             <button
+                                key={r}
                                 className='flex-1 border rounded-lg px-3 py-2 text-center font-medium transition-colors cursor-pointer'
                                 onClick={()=>setRole(r)}
                                 style={

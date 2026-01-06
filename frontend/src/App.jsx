@@ -22,33 +22,73 @@ import useUpdateLocation from './hooks/useUpdateLocation'
 import TrackOrderPage from './pages/TrackOrderPage'
 import Shop from './pages/Shop'
 import { useEffect } from 'react'
-import { io } from 'socket.io-client'
-import { setSocket } from './redux/userSlice'
+import { initSocket, disconnectSocket, identifySocket, getSocket } from './socket'
 
-export const serverUrl="http://localhost:8000"
+export const serverUrl = "http://localhost:8000";
+
 function App() {
     const {userData}=useSelector(state=>state.user)
     const dispatch=useDispatch()
-  useGetCurrentUser()
-useUpdateLocation()
   useGetCity()
+  useGetCurrentUser()
+  useUpdateLocation()
   useGetMyshop()
   useGetShopByCity()
   useGetItemsByCity()
   useGetMyOrders()
 
-  useEffect(()=>{
-const socketInstance=io(serverUrl,{withCredentials:true})
-dispatch(setSocket(socketInstance))
-socketInstance.on('connect',()=>{
-if(userData){
-  socketInstance.emit('identity',{userId:userData._id})
-}
-})
-return ()=>{
-  socketInstance.disconnect()
-}
-  },[userData?._id])
+  // Socket connection management
+  useEffect(() => {
+    // Initialize socket connection
+    const socketInstance = initSocket(serverUrl)
+
+    // Handle initial connection and reconnections
+    const handleConnect = () => {
+      console.log('Frontend: Socket connected with ID:', socketInstance.id)
+      if (userData?._id) {
+        console.log('Frontend: Emitting identity for user:', userData._id, 'role:', userData.role)
+        identifySocket(userData._id)
+      }
+    }
+
+    const handleDisconnect = (reason) => {
+      console.log('Frontend: Socket disconnected, reason:', reason)
+    }
+
+    const handleReconnect = () => {
+      console.log('Frontend: Socket reconnected')
+      // Re-identify after reconnection
+      if (userData?._id) {
+        console.log('Frontend: Re-emitting identity after reconnection')
+        identifySocket(userData._id)
+      }
+    }
+
+    // Attach event listeners
+    socketInstance.on('connect', handleConnect)
+    socketInstance.on('disconnect', handleDisconnect)
+    socketInstance.on('reconnect', handleReconnect)
+
+    // If already connected and user data is available, identify immediately
+    if (socketInstance.connected && userData?._id) {
+      identifySocket(userData._id)
+    }
+
+    // Cleanup function
+    return () => {
+      socketInstance.off('connect', handleConnect)
+      socketInstance.off('disconnect', handleDisconnect)
+      socketInstance.off('reconnect', handleReconnect)
+      // Don't disconnect here as other components might be using the socket
+    }
+  }, [userData?._id])
+
+  // Cleanup socket on unmount
+  useEffect(() => {
+    return () => {
+      disconnectSocket()
+    }
+  }, [])
 
   return (
    <Routes>

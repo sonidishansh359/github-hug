@@ -5,6 +5,7 @@ import User from "../models/user.model.js"
 import { sendDeliveryOtpMail } from "../utils/mail.js"
 import RazorPay from "razorpay"
 import dotenv from "dotenv"
+import { count } from "console"
 
 dotenv.config()
 let instance = new RazorPay({
@@ -93,19 +94,21 @@ export const placeOrder = async (req, res) => {
 
         if (io) {
             newOrder.shopOrders.forEach(shopOrder => {
-                const ownerSocketId = shopOrder.owner.socketId
-                if (ownerSocketId) {
-                    io.to(ownerSocketId).emit('newOrder', {
-                        _id: newOrder._id,
-                        paymentMethod: newOrder.paymentMethod,
-                        user: newOrder.user,
-                        shopOrders: shopOrder,
-                        createdAt: newOrder.createdAt,
-                        deliveryAddress: newOrder.deliveryAddress,
-                        payment: newOrder.payment
-                    })
-                }
+                // Emit to the owner room (joined on identity) instead of relying on stored socketId
+                const ownerRoom = `user_${shopOrder.owner._id}`
+                console.log('Backend: Emitting newOrder to owner room:', ownerRoom, 'for shopOrder:', shopOrder._id)
+                io.to(ownerRoom).emit('newOrder', {
+                    _id: newOrder._id,
+                    paymentMethod: newOrder.paymentMethod,
+                    user: newOrder.user,
+                    shopOrders: shopOrder,
+                    createdAt: newOrder.createdAt,
+                    deliveryAddress: newOrder.deliveryAddress,
+                    payment: newOrder.payment
+                })
             });
+        } else {
+            console.log('Backend: No io instance found')
         }
 
 
@@ -141,18 +144,16 @@ export const verifyPayment = async (req, res) => {
 
         if (io) {
             order.shopOrders.forEach(shopOrder => {
-                const ownerSocketId = shopOrder.owner.socketId
-                if (ownerSocketId) {
-                    io.to(ownerSocketId).emit('newOrder', {
-                        _id: order._id,
-                        paymentMethod: order.paymentMethod,
-                        user: order.user,
-                        shopOrders: shopOrder,
-                        createdAt: order.createdAt,
-                        deliveryAddress: order.deliveryAddress,
-                        payment: order.payment
-                    })
-                }
+                const ownerRoom = `user_${shopOrder.owner._id}`
+                io.to(ownerRoom).emit('newOrder', {
+                    _id: order._id,
+                    paymentMethod: order.paymentMethod,
+                    user: order.user,
+                    shopOrders: shopOrder,
+                    createdAt: order.createdAt,
+                    deliveryAddress: order.deliveryAddress,
+                    payment: order.payment
+                })
             });
         }
 
@@ -234,7 +235,7 @@ export const updateOrderStatus = async (req, res) => {
             const nearByIds = nearByDeliveryBoys.map(b => b._id)
             const busyIds = await DeliveryAssignment.find({
                 assignedTo: { $in: nearByIds },
-                status: { $nin: ["brodcasted", "completed"] }
+                status: { $nin: ["completed"] }
 
             }).distinct("assignedTo")
 
@@ -272,20 +273,22 @@ export const updateOrderStatus = async (req, res) => {
             await deliveryAssignment.populate('shop')
             const io = req.app.get('io')
             if (io) {
+                console.log('Backend: Broadcasting newAssignment to', availableBoys.length, 'delivery boys')
                 availableBoys.forEach(boy => {
-                    const boySocketId = boy.socketId
-                    if (boySocketId) {
-                        io.to(boySocketId).emit('newAssignment', {
-                            sentTo:boy._id,
-                            assignmentId: deliveryAssignment._id,
-                            orderId: deliveryAssignment.order._id,
-                            shopName: deliveryAssignment.shop.name,
-                            deliveryAddress: deliveryAssignment.order.deliveryAddress,
-                            items: deliveryAssignment.order.shopOrders.find(so => so._id.equals(deliveryAssignment.shopOrderId)).shopOrderItems || [],
-                            subtotal: deliveryAssignment.order.shopOrders.find(so => so._id.equals(deliveryAssignment.shopOrderId))?.subtotal
-                        })
-                    }
+                    console.log('Backend: Emitting to delivery boy room:', `user_${boy._id}`)
+                    // Emit to delivery boy's user room instead of socket ID
+                    io.to(`user_${boy._id}`).emit('newAssignment', {
+                        sentTo: boy._id,
+                        assignmentId: deliveryAssignment._id,
+                        orderId: deliveryAssignment.order._id,
+                        shopName: deliveryAssignment.shop.name,
+                        deliveryAddress: deliveryAssignment.order.deliveryAddress,
+                        items: deliveryAssignment.order.shopOrders.find(so => so._id.equals(deliveryAssignment.shopOrderId)).shopOrderItems || [],
+                        subtotal: deliveryAssignment.order.shopOrders.find(so => so._id.equals(deliveryAssignment.shopOrderId))?.subtotal
+                    })
                 });
+
+                // Note: Removed broadcast to delivery_boys room to prevent showing assignments to ineligible delivery boys
             }
 
 
@@ -301,17 +304,16 @@ export const updateOrderStatus = async (req, res) => {
         await order.populate("shopOrders.assignedDeliveryBoy", "fullName email mobile")
         await order.populate("user", "socketId")
 
-        const io = req.app.get('io')
-        if (io) {
-            const userSocketId = order.user.socketId
-            if (userSocketId) {
-                io.to(userSocketId).emit('update-status', {
-                    orderId: order._id,
-                    shopId: updatedShopOrder.shop._id,
-                    status: updatedShopOrder.status,
-                    userId: order.user._id
-                })
-            }
+        const io2 = req.app.get('io')
+        if (io2) {
+            // Emit to the user's room so the client receives realtime updates reliably
+            const userRoom = `user_${order.user._id}`
+            io2.to(userRoom).emit('update-status', {
+                orderId: order._id,
+                shopId: updatedShopOrder.shop._id,
+                status: updatedShopOrder.status,
+                userId: order.user._id
+            })
         }
 
 
@@ -337,7 +339,8 @@ export const getDeliveryBoyAssignment = async (req, res) => {
         const deliveryBoyId = req.userId
         const assignments = await DeliveryAssignment.find({
             brodcastedTo: deliveryBoyId,
-            status: "brodcasted"
+            status: "brodcasted",
+            assignedTo: null
         })
             .populate("order")
             .populate("shop")
@@ -361,30 +364,36 @@ export const getDeliveryBoyAssignment = async (req, res) => {
 export const acceptOrder = async (req, res) => {
     try {
         const { assignmentId } = req.params
-        const assignment = await DeliveryAssignment.findById(assignmentId)
-        if (!assignment) {
-            return res.status(400).json({ message: "assignment not found" })
-        }
-        if (assignment.status !== "brodcasted") {
-            return res.status(400).json({ message: "assignment is expired" })
-        }
 
+        // Prevent a delivery boy from accepting multiple concurrent assignments
         const alreadyAssigned = await DeliveryAssignment.findOne({
             assignedTo: req.userId,
-            status: { $nin: ["brodcasted", "completed"] }
+            status: { $nin: ["completed"] }
         })
 
         if (alreadyAssigned) {
             return res.status(400).json({ message: "You are already assigned to another order" })
         }
 
-        assignment.assignedTo = req.userId
-        assignment.status = 'assigned'
-        assignment.acceptedAt = new Date()
-        await assignment.save()
+        // Atomically claim the assignment only if it's still brodcasted and not assigned
+        const assignment = await DeliveryAssignment.findOneAndUpdate(
+            { _id: assignmentId, status: 'brodcasted', assignedTo: null },
+            { $set: { assignedTo: req.userId, status: 'assigned', acceptedAt: new Date() } },
+            { new: true }
+        )
+
+        if (!assignment) {
+            // Assignment was already accepted by another delivery boy or doesn't exist
+            return res.status(400).json({ message: "Assignment is no longer available" })
+        }
 
         const order = await Order.findById(assignment.order)
         if (!order) {
+            // roll back assignment in case of missing order
+            assignment.assignedTo = null
+            assignment.status = 'brodcasted'
+            assignment.acceptedAt = null
+            await assignment.save()
             return res.status(400).json({ message: "order not found" })
         }
 
@@ -392,10 +401,14 @@ export const acceptOrder = async (req, res) => {
         shopOrder.assignedDeliveryBoy = req.userId
         await order.save()
 
+        // notify buyer/owner realtime if io is available
+        const io = req.app.get('io')
+        if (io) {
+            const userRoom = `user_${order.user}`
+            io.to(userRoom).emit('assignment-accepted', { assignmentId: assignment._id, orderId: order._id })
+        }
 
-        return res.status(200).json({
-            message: 'order accepted'
-        })
+        return res.status(200).json({ message: 'order accepted' })
     } catch (error) {
         return res.status(500).json({ message: `accept order error ${error}` })
     }
@@ -405,6 +418,24 @@ export const acceptOrder = async (req, res) => {
 
 export const getCurrentOrder = async (req, res) => {
     try {
+        // Clean up stuck assignments where shopOrder is delivered
+        const stuckAssignments = await DeliveryAssignment.find({
+            assignedTo: req.userId,
+            status: "assigned"
+        }).populate({
+            path: "order",
+            populate: { path: "shopOrders" }
+        })
+
+        for (const assignment of stuckAssignments) {
+            if (assignment.order) {
+                const shopOrder = assignment.order.shopOrders.find(so => String(so._id) == String(assignment.shopOrderId))
+                if (shopOrder && shopOrder.status === "delivered") {
+                    await DeliveryAssignment.findByIdAndDelete(assignment._id)
+                }
+            }
+        }
+
         const assignment = await DeliveryAssignment.findOne({
             assignedTo: req.userId,
             status: "assigned"
@@ -421,6 +452,8 @@ export const getCurrentOrder = async (req, res) => {
             return res.status(400).json({ message: "assignment not found" })
         }
         if (!assignment.order) {
+            // Clean up orphaned assignment
+            await DeliveryAssignment.findByIdAndDelete(assignment._id)
             return res.status(400).json({ message: "order not found" })
         }
 
@@ -453,7 +486,7 @@ export const getCurrentOrder = async (req, res) => {
 
 
     } catch (error) {
-
+        return res.status(500).json({ message: `get current order error ${error}` })
     }
 }
 
@@ -488,17 +521,28 @@ export const getOrderById = async (req, res) => {
 export const sendDeliveryOtp = async (req, res) => {
     try {
         const { orderId, shopOrderId } = req.body
-        const order = await Order.findById(orderId).populate("user")
+        const order = await Order.findById(orderId).populate("user", "fullName email mobile")
+        if (!order) {
+            return res.status(400).json({ message: "order not found" })
+        }
         const shopOrder = order.shopOrders.id(shopOrderId)
-        if (!order || !shopOrder) {
-            return res.status(400).json({ message: "enter valid order/shopOrderid" })
+        if (!shopOrder) {
+            return res.status(400).json({ message: "shop order not found" })
+        }
+        if (!order.user || !order.user.email) {
+            return res.status(400).json({ message: "Customer email not found" })
         }
         const otp = Math.floor(1000 + Math.random() * 9000).toString()
         shopOrder.deliveryOtp = otp
         shopOrder.otpExpires = Date.now() + 5 * 60 * 1000
         await order.save()
-        await sendDeliveryOtpMail(order.user, otp)
-        return res.status(200).json({ message: `Otp sent Successfuly to ${order?.user?.fullName}` })
+        try{
+            await sendDeliveryOtpMail(order.user.email, otp)
+        }catch(mailErr){
+            console.error('sendDeliveryOtpMail error', mailErr)
+            return res.status(500).json({ message: 'Failed to send OTP email' })
+        }
+        return res.status(200).json({ message: `Otp sent successfully to ${order.user.email}` })
     } catch (error) {
         return res.status(500).json({ message: `delivery otp error ${error}` })
     }
@@ -507,7 +551,7 @@ export const sendDeliveryOtp = async (req, res) => {
 export const verifyDeliveryOtp = async (req, res) => {
     try {
         const { orderId, shopOrderId, otp } = req.body
-        const order = await Order.findById(orderId).populate("user")
+        const order = await Order.findById(orderId).populate("user", "fullName email mobile")
         const shopOrder = order.shopOrders.id(shopOrderId)
         if (!order || !shopOrder) {
             return res.status(400).json({ message: "enter valid order/shopOrderid" })
@@ -532,7 +576,53 @@ export const verifyDeliveryOtp = async (req, res) => {
     }
 }
 
+export const getTodayDeliveries=async (req,res) => {
+    try {
+        const deliveryBoyId=req.userId
+        const startsOfDay=new Date()
+        startsOfDay.setHours(0,0,0,0)
 
+        const orders=await Order.find({
+           "shopOrders.assignedDeliveryBoy":deliveryBoyId,
+           "shopOrders.status":"delivered",
+           "shopOrders.deliveredAt":{$gte:startsOfDay}
+        }).lean()
+
+     let todaysDeliveries=[] 
+     
+     orders.forEach(order=>{
+        order.shopOrders.forEach(shopOrder=>{
+            if(shopOrder.assignedDeliveryBoy==deliveryBoyId &&
+                shopOrder.status=="delivered" &&
+                shopOrder.deliveredAt &&
+                shopOrder.deliveredAt>=startsOfDay
+            ){
+                todaysDeliveries.push(shopOrder)
+            }
+        })
+     })
+
+let stats={}
+
+todaysDeliveries.forEach(shopOrder=>{
+    const hour=new Date(shopOrder.deliveredAt).getHours()
+    stats[hour]=(stats[hour] || 0) + 1
+})
+
+let formattedStats=Object.keys(stats).map(hour=>({
+ hour:parseInt(hour),
+ count:stats[hour]   
+}))
+
+formattedStats.sort((a,b)=>a.hour-b.hour)
+
+return res.status(200).json(formattedStats)
+  
+
+    } catch (error) {
+        return res.status(500).json({ message: `today deliveries error ${error}` }) 
+    }
+}
 
 
 
